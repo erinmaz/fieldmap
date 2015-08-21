@@ -1,5 +1,7 @@
 #!/usr/bin/env tcsh
 
+# IMPORTANT: For the correct data to be acquired, you must change the rhrcctrl CV to 28 before scanning.
+
 # Requires afni (dicom_hinfo), dcm2nii, and FSL to be installed on your machine.
 
 # Call from inside a directory containing your field map dicoms (and only your field map dicoms)
