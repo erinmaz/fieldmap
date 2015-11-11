@@ -4,16 +4,15 @@
 
 # Requires afni (dicom_hinfo), dcm2nii, and FSL to be installed on your machine.
 
-# Call from inside a directory containing your field map dicoms (and only your field map dicoms)
-# Hard coded to expect 4 echos, real/imag data for each, 2.064 ms between echos
+# Call from inside a directory containing your field map dicoms (and only your field map dicoms). Dicoms should have *.dcm extension
+# Hard coded to expect 4 echos, real/imag data for each
+# Reads the echo spacing from the dicom headers 
 
 # You can use the protocol Marc Lebel set up for me, found in OTHER - CO2 exercise Jan 9). 
 # Remember to set the rhrcctrl CV to 28 in order to save real and imaginary output.
 
 # You do not want the shim to change between the field map acquisition and the EPI scan you are planning to apply it to. 
 # Ideally you also don't want the centre frequency to change (I think), but I don't know how to skip that without also skipping the gain prescans.
-
-# This script can deal with geometric differences (e.g., different # of slices). I think! I haven't tested it too much.
 
 # I'm not doing any fitting of the echos - I'm just calculating the phase difference between echos.
 
@@ -26,7 +25,7 @@
 # https://www.jiscmail.ac.uk/cgi-bin/webadmin?A2=ind1208&L=FSL&P=R71288&1=FSL&9=A&J=on&d=No+Match%3BMatch%3BMatches&z=4
 # https://www.jiscmail.ac.uk/cgi-bin/webadmin?A2=ind1212&L=FSL&P=R48486&1=FSL&9=A&I=-3&J=on&d=No+Match%3BMatch%3BMatches&z=4
 
-# Erin Mazerolle (erinmaz@gmail.com), updated Feb 12, 2015
+# Erin Mazerolle (erinmaz@gmail.com), updated Nov 12, 2015
 
 mkdir real
 mkdir imag
@@ -38,6 +37,18 @@ foreach f (`ls *dcm`)
 		else mv $f real/.
 	endif
 end
+
+# Get the echo spacing. This is making some assumptions about the order of the files but seems to work.
+set file1 = `ls imag/*.dcm | head -1` 
+set oldTE = `dicom_hinfo -tag 0018,0081 $file1 | awk '{print $2}'`
+foreach f (`ls imag/*dcm`)
+	set TE = `dicom_hinfo -tag 0018,0081 $f | awk '{print $2}'`
+	if ("$TE" != "$oldTE") then
+		set echo_spacing = `echo $TE - $oldTE | bc`
+		break
+	endif
+end
+
 dcm2nii real
 dcm2nii imag
 mv real/*.nii.gz real.nii.gz
@@ -83,11 +94,11 @@ prelude -a TE1_mag -p phase3_rad -o phase3_unwrapped_rad
 
 #field maps created with echo 1 look wrong. not sure why.
 #fslmaths phase1_unwrapped_rad -sub phase0_unwrapped_rad -mul 1000 -div 2.064 fm_e1_e2 -odt float
-fslmaths phase2_unwrapped_rad -sub phase1_unwrapped_rad -mul 1000 -div 2.064 fm_e2_e3 -odt float
-fslmaths phase3_unwrapped_rad -sub phase2_unwrapped_rad -mul 1000 -div 2.064 fm_e3_e4 -odt float
+fslmaths phase2_unwrapped_rad -sub phase1_unwrapped_rad -mul 1000 -div ${echo_spacing} fm_e2_e3 -odt float
+fslmaths phase3_unwrapped_rad -sub phase2_unwrapped_rad -mul 1000 -div ${echo_spacing}  fm_e3_e4 -odt float
 #fslmaths phase2_unwrapped_rad -sub phase0_unwrapped_rad -mul 1000 -div 4.128 fm_e1_e3 -odt float
 #fslmaths phase3_unwrapped_rad -sub phase0_unwrapped_rad -mul 1000 -div 6.192 fm_e1_e4 -odt float
-fslmaths phase3_unwrapped_rad -sub phase1_unwrapped_rad -mul 1000 -div 4.128 fm_e2_e4 -odt float
+fslmaths phase3_unwrapped_rad -sub phase1_unwrapped_rad -mul 1000 -div ${echo_spacing}  -div 2 fm_e2_e4 -odt float
 #could average the three good field maps together if you wanted.
 
 # bug in FUGUE and/or fslcomplex means orientation info gets lost, so we must add it back in
